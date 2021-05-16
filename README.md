@@ -7,6 +7,29 @@ only the specified files to a new directory, renaming them to identifiable names
 in the process. The main reason being formatting files for
 [Moss](https://theory.stanford.edu/~aiken/moss/).
 
+## Installation
+
+### Via Cargo (Recommended)
+
+moss-fmt can be installed via [Cargo](https://doc.rust-lang.org/cargo/), which
+comes with [Rustup](https://www.rust-lang.org/learn/get-started) via:
+
+``` sh
+cargo install moss-fmt
+```
+
+### Manually building
+
+You may manually build the source code using:
+
+``` sh
+$ git clone https://github.com/CJohnson19/moss-fmt.git
+$ cd moss-fmt
+$ cargo build --release
+```
+
+The binary will then be in `target/release/moss-fmt`.
+
 ## Usage
 
 ``` sh
