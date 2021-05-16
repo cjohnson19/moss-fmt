@@ -20,5 +20,6 @@ Session.vim
 
 ## Build
 /target
+/testing
 
 Cargo.lock
