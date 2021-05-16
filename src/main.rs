@@ -1,3 +1,7 @@
+//! A tool to extract only required files from a large number of zips
+//!
+//! Used mainly for MOSS preprocessing, but can be extended to any arbitrary task. Allows
+//! exclusion of folders in zips, creates no artifacts, runs quickly, easy to understand.
 mod path_verifier;
 
 extern crate clap;
