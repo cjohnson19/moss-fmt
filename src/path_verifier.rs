@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 use std::path::Path;
 
+/// Struct that verifies [`Path`] objects against provided arguments
+///
+/// Holds a [`HashSet`] of folders to exclude and a [`HashSet`] of files the user is searching for.
 #[derive(Debug)]
 pub struct PathVerifier {
     restricted_folders: HashSet<String>,
@@ -8,6 +11,7 @@ pub struct PathVerifier {
 }
 
 impl PathVerifier {
+    /// Add a new file name to search for
     pub fn add_search_file(&mut self, file_name: &str) -> Self {
         self.search_files.insert(file_name.to_string());
         Self {
@@ -16,6 +20,7 @@ impl PathVerifier {
         }
     }
 
+    /// Add a new folder to exclude from search
     pub fn add_restricted_folder(&mut self, folder_name: &str) -> Self {
         self.restricted_folders.insert(folder_name.to_string());
         Self {
@@ -24,6 +29,21 @@ impl PathVerifier {
         }
     }
 
+    /// Test if the [`Path`] is valid per user constaints
+    ///
+    /// The [`Path`] must not have any folder component which is in the excluded folders and
+    /// the file name must be in the set of names to search for.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use std::path::Path;
+    ///
+    /// // The path contains "__MACOSX" which is excluded by default
+    /// let file_path = Path::new("__MACOSX/index.js");
+    /// let verifier = PathVerifier::default().add_search_file("index.js");
+    /// assert!(!verifier.verify(file_path));
+    /// ```
     pub fn verify(&self, path: &Path) -> bool {
         let mut pieces = path.components().map(|comp| comp.as_os_str());
         pieces.all(|comp| !self.restricted_folders.contains(comp.to_str().unwrap()))
