@@ -59,7 +59,7 @@ fn collect_zips_from_dir(dir_name: &str) -> Vec<(String, ZipArchive<File>)> {
     let mut zips = Vec::new();
     for path in paths {
         let entry = path.unwrap();
-        if path_is_zip(&entry).unwrap_or(false) {
+        if path_is_zip(&entry) {
             let file_name = entry
                 .file_name()
                 .to_str()
