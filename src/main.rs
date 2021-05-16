@@ -7,13 +7,49 @@ use std::ffi::OsStr;
 use std::fs;
 use std::fs::{DirEntry, File};
 use std::path::Path;
-use zip::ZipArchive;
+use zip::read::ZipFile;
+use zip::{CompressionMethod, ZipArchive};
 
-fn path_is_zip(entry: &DirEntry) -> Result<bool, std::io::Error> {
+/// Verifies that a [`DirEntry`] is a zip.
+///
+/// Checks if an entry is a zip by first verifying the entry is a file and ends in ".zip". Files
+/// that have the ".zip" extension but are not able to be handled by the application will
+/// be found in [`extract_files`] via [`supported_compression_method`].
+///
+/// # Examples
+///
+/// ```
+/// use std::fs;
+/// use std::ffi::OsStr;
+///
+/// for entry in fs::read_dir(".") {
+///   println!("{:?} is zip? {}", entry.unwrap().path(), path_is_zip(entry));
+/// }
+/// ```
+fn path_is_zip(entry: &DirEntry) -> bool {
     let path = entry.path();
-    Ok(path.is_file() && path.extension().unwrap_or(OsStr::new("")).eq("zip"))
+    path.is_file() && path.extension().unwrap_or(OsStr::new("")).eq("zip")
 }
 
+/// Checks if a [`ZipFile`]'s [compression method] is supported.
+///
+/// Currently accepts `BZIP2`, `STORE`, `DEFLATE`, and `DEFLATE64`.
+///
+/// [compression method]: zip::CompressionMethod
+fn supported_compression_method(file: &ZipFile) -> bool {
+    match file.compression() {
+        CompressionMethod::BZIP2
+        | CompressionMethod::STORE
+        | CompressionMethod::DEFLATE
+        | CompressionMethod::DEFLATE64 => true,
+        _ => false,
+    }
+}
+
+/// Collects the name and zip archive of all zips in `dir_name`.
+///
+/// All zips in `dir_name` are returned as a tuple, with the first item representing the file
+/// name of the zip without the extension, and the second item being the [`ZipArchive`]
 fn collect_zips_from_dir(dir_name: &str) -> Vec<(String, ZipArchive<File>)> {
     let paths = fs::read_dir(dir_name).unwrap();
     let mut zips = Vec::new();
@@ -34,6 +70,12 @@ fn collect_zips_from_dir(dir_name: &str) -> Vec<(String, ZipArchive<File>)> {
     return zips;
 }
 
+/// Extracts all valid files from `dir_name` and places a copy in `output_dir`.
+///
+/// Iterates through all [`ZipFile`]s in a [`ZipArchive`]. If the file is determined to be valid via
+/// the [`PathVerifier`] and the compression method is supported via [`supported_compression_method`],
+/// then we name the new file after the search file name and the original [`ZipArchive`] it began in.
+/// The new file is then copied into `output_dir`.
 fn extract_files(dir_name: &str, verifier: PathVerifier, output_dir: &str, verbose: bool) {
     let zip_archives = collect_zips_from_dir(dir_name);
     let base_output_path = Path::new(output_dir);
@@ -41,6 +83,9 @@ fn extract_files(dir_name: &str, verifier: PathVerifier, output_dir: &str, verbo
         for i in 0..zip_archive.len() {
             let mut search_file = zip_archive.by_index(i).unwrap();
             if !verifier.verify(&search_file.enclosed_name().unwrap()) {
+                continue;
+            }
+            if !supported_compression_method(&search_file) {
                 continue;
             }
             let search_file_name = search_file
@@ -70,6 +115,7 @@ fn extract_files(dir_name: &str, verifier: PathVerifier, output_dir: &str, verbo
     }
 }
 
+/// Prints beginning information when in verbose use.
 fn print_info(dir_name: &str, search_files: &Vec<&str>) {
     let n = search_files.len();
     if n == 1 {
@@ -84,6 +130,19 @@ fn print_info(dir_name: &str, search_files: &Vec<&str>) {
             println!("  {}: {}", i + 1, search_files.get(i).unwrap());
         }
     }
+}
+
+/// Checks `dir_name` and `output_dir` both exist and are directories.
+fn check_dirs(dir_name: &str, output_dir: &str) -> Result<(), &'static str> {
+    let input_dir = File::open(dir_name).expect("Input directory doesn't exist.");
+    if input_dir.metadata().unwrap().is_file() {
+        return Err("Input directory cannot be a file.");
+    }
+    let input_dir = File::open(output_dir).expect("Output directory doesn't exist.");
+    if input_dir.metadata().unwrap().is_file() {
+        return Err("Output directory cannot be a file.");
+    }
+    return Ok(());
 }
 
 fn main() {
@@ -145,6 +204,7 @@ fn main() {
     let dir_name = matches.value_of("dir").unwrap();
     let output_dir = matches.value_of("output").unwrap_or("./");
     let verbose = matches.is_present("verbosity");
+    check_dirs(dir_name, output_dir).unwrap();
     if verbose {
         let file_names: Vec<&str> = matches.values_of("file").unwrap().collect::<Vec<&str>>();
         print_info(dir_name, &file_names);
