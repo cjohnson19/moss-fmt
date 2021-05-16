@@ -3,6 +3,12 @@ name = "moss-fmt"
 version = "0.1.0"
 authors = ["joh13266 <joh13266@umn.edu>"]
 edition = "2018"
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/CJohnson19/moss-fmt"
+repository = "https://github.com/CJohnson19/moss-fmt"
+keywords = ["zip", "moss", "format", "fmt"]
+categories = ["command-line-utilities", "filesystem"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
