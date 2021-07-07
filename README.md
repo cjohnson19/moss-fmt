@@ -1,5 +1,7 @@
 # moss-fmt
 
+[![Build Status](https://travis-ci.com/CJohnson19/moss-fmt.svg?branch=master)](https://travis-ci.com/CJohnson19/moss-fmt)
+
 ## Description
 
 moss-fmt is an executable tool that searches a directory of zips and extracts
