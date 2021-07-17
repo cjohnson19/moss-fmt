@@ -54,6 +54,8 @@ moss-fmt [FLAGS] [OPTIONS] --dir <dir> --filename <file>
   `__MACOSX` and `node_modules`.
 - `-o`, `--output`: Directory to store resulting files. Defaults to current
   working directory.
+- `-l`, `--log-file`: File to store run information like zips without a file or
+  files that are compressed using unsupported methods. Defaults to `moss-fmt.log`
 
 
 ## Features

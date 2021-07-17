@@ -16,3 +16,5 @@ categories = ["command-line-utilities", "filesystem"]
 [dependencies]
 zip = "0.5"
 clap = "2.33.3"
+simplelog = "^0.10.0"
+log = "0.4.14"
