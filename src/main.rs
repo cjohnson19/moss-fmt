@@ -4,9 +4,13 @@
 //! exclusion of folders in zips, creates no artifacts, runs quickly, easy to understand.
 mod path_verifier;
 
+#[macro_use]
+extern crate log;
 extern crate clap;
+extern crate simplelog;
 use crate::path_verifier::PathVerifier;
 use clap::{App, Arg};
+use simplelog::*;
 use std::ffi::OsStr;
 use std::fs;
 use std::fs::{DirEntry, File};
@@ -69,8 +73,11 @@ fn collect_zips_from_dir(dir_name: &str) -> Vec<(String, ZipArchive<File>)> {
             let file = File::open(entry.path()).unwrap();
             let zip = zip::ZipArchive::new(file).unwrap();
             zips.push((file_name, zip));
+        } else {
+            warn!("{} is not a zip file", entry.file_name().to_str().unwrap());
         }
     }
+    zips.sort_by(|(a, _), (b, _)| a.partial_cmp(b).unwrap());
     return zips;
 }
 
@@ -80,16 +87,13 @@ fn collect_zips_from_dir(dir_name: &str) -> Vec<(String, ZipArchive<File>)> {
 /// the [`PathVerifier`] and the compression method is supported via [`supported_compression_method`],
 /// then we name the new file after the search file name and the original [`ZipArchive`] it began in.
 /// The new file is then copied into `output_dir`.
-fn extract_files(dir_name: &str, verifier: PathVerifier, output_dir: &str, verbose: bool) {
+fn extract_files(dir_name: &str, verifier: &mut PathVerifier, output_dir: &str) {
     let zip_archives = collect_zips_from_dir(dir_name);
     let base_output_path = Path::new(output_dir);
     for (zip_name, mut zip_archive) in zip_archives {
         for i in 0..zip_archive.len() {
             let mut search_file = zip_archive.by_index(i).unwrap();
             if !verifier.verify(&search_file.enclosed_name().unwrap()) {
-                continue;
-            }
-            if !supported_compression_method(&search_file) {
                 continue;
             }
             let search_file_name = search_file
@@ -99,23 +103,26 @@ fn extract_files(dir_name: &str, verifier: PathVerifier, output_dir: &str, verbo
                 .unwrap()
                 .to_str()
                 .unwrap();
-            if verbose {
-                println!(
-                    "Found matching file {} in {}.zip",
-                    search_file_name, zip_name
+            if !supported_compression_method(&search_file) {
+                warn!(
+                    "{} is not compressed using a supported method",
+                    search_file_name
                 );
+                continue;
             }
+            info!(
+                "Found matching file {} in {}.zip",
+                search_file_name, zip_name
+            );
             let output_file_name = format!("{}-{}", zip_name, search_file_name);
             let output_file_path = base_output_path.join(output_file_name.clone());
             let mut output_file = File::create(output_file_path).unwrap();
-            if verbose {
-                println!("Copying file {} to {}", search_file_name, output_file_name);
-            }
+            info!("Copying file {} to {}", search_file_name, output_file_name);
             std::io::copy(&mut search_file, &mut output_file).unwrap();
-            if verbose {
-                println!("Successfully copied file to {}\n", output_file_name);
-            }
+            info!("Successfully copied file to {}\n", output_file_name);
         }
+        verifier.print_progress(&zip_name);
+        verifier.reset();
     }
 }
 
@@ -123,27 +130,33 @@ fn extract_files(dir_name: &str, verifier: PathVerifier, output_dir: &str, verbo
 fn print_info(dir_name: &str, search_files: &Vec<&str>) {
     let n = search_files.len();
     if n == 1 {
-        println!(
+        info!(
             "Searching in directory {} for {}...",
             dir_name,
             search_files.get(0).unwrap()
         );
     } else {
-        println!("Searching in directory {} for {} files...", dir_name, n);
+        info!("Searching in directory {} for {} files...", dir_name, n);
         for i in 0..n {
-            println!("  {}: {}", i + 1, search_files.get(i).unwrap());
+            info!("{}: {}", i + 1, search_files.get(i).unwrap());
         }
     }
 }
 
 /// Checks `dir_name` and `output_dir` both exist and are directories.
 fn check_dirs(dir_name: &str, output_dir: &str) -> Result<(), &'static str> {
-    let input_dir = File::open(dir_name).expect("Input directory doesn't exist.");
-    if input_dir.metadata().unwrap().is_file() {
+    let input_dir = File::open(dir_name);
+    if input_dir.is_err() {
+        return Err("Input directory doesn't exist.");
+    }
+    if input_dir.expect("").metadata().unwrap().is_file() {
         return Err("Input directory cannot be a file.");
     }
-    let input_dir = File::open(output_dir).expect("Output directory doesn't exist.");
-    if input_dir.metadata().unwrap().is_file() {
+    let output_dir = File::open(output_dir);
+    if output_dir.is_err() {
+        return Err("Output directory doesn't exist.");
+    }
+    if output_dir.expect("").metadata().unwrap().is_file() {
         return Err("Output directory cannot be a file.");
     }
     return Ok(());
@@ -194,6 +207,14 @@ fn main() {
                 .long("verbose")
                 .help("Output more information about operations being performed"),
         )
+        .arg(
+            Arg::with_name("log-file")
+                .short("l")
+                .long("log-file")
+                .takes_value(true)
+                .default_value("moss-fmt.log")
+                .help("Outputs information to a file instead of terminal"),
+        )
         .get_matches();
 
     let mut verifier = PathVerifier::default();
@@ -208,10 +229,34 @@ fn main() {
     let dir_name = matches.value_of("dir").unwrap();
     let output_dir = matches.value_of("output").unwrap_or("./");
     let verbose = matches.is_present("verbosity");
-    check_dirs(dir_name, output_dir).unwrap();
+    CombinedLogger::init(vec![
+        TermLogger::new(
+            if verbose {
+                LevelFilter::Info
+            } else {
+                LevelFilter::Warn
+            },
+            Config::default(),
+            TerminalMode::Mixed,
+            ColorChoice::Auto,
+        ),
+        WriteLogger::new(
+            LevelFilter::Info,
+            Config::default(),
+            File::create(matches.value_of("log-file").unwrap()).unwrap(),
+        ),
+    ])
+    .unwrap();
+    match check_dirs(dir_name, output_dir) {
+        Ok(_) => (),
+        Err(msg) => {
+            error!("{}", msg);
+            return;
+        }
+    }
     if verbose {
         let file_names: Vec<&str> = matches.values_of("file").unwrap().collect::<Vec<&str>>();
         print_info(dir_name, &file_names);
     }
-    extract_files(dir_name, verifier, output_dir, verbose);
+    extract_files(dir_name, &mut verifier, output_dir);
 }
