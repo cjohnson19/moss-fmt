@@ -1,7 +1,7 @@
 [package]
 name = "moss-fmt"
 description = "An executable tool to extract only desired files from a series of zips"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["joh13266 <joh13266@umn.edu>"]
 edition = "2018"
 license = "MIT"
